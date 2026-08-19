@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "starstacker"
+version = "0.1.0"
+description = "Astrophotography frame stacking pipeline with optional AI-assisted stages"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.26",
+    "astropy>=6.0",
+    "opencv-python>=4.9",
+    "scipy>=1.12",
+    "rawpy>=0.19",
+    "exifread>=3.0",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["starstacker*"]
