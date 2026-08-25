@@ -6,9 +6,10 @@ Full planned architecture:
         -> [AI-Assisted Alignment] -> Normalization -> Stacking
         -> [AI Denoising] -> Output
 
-Only "Raw Frames", "Preprocessing", and "Calibration" are implemented so
-far. Each later stage is stubbed below in call order so the pipeline shape
-stays visible; they raise NotImplementedError until built.
+"Raw Frames", "Preprocessing", "Calibration", "Alignment", and
+"Normalization" are implemented so far and reachable from `run()`. Each
+remaining stage is stubbed below in call order so the pipeline shape stays
+visible; they raise NotImplementedError until built.
 """
 
 from __future__ import annotations
@@ -16,9 +17,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from starstacker.alignment.pipeline import AlignmentConfig, AlignmentPipeline
 from starstacker.calibration.pipeline import CalibrationConfig, CalibrationPipeline
 from starstacker.io.frame import RawFrame
 from starstacker.io.loaders import load_frame_set
+from starstacker.normalization.pipeline import NormalizationConfig, NormalizationPipeline
 from starstacker.preprocessing.pipeline import PreprocessingConfig, PreprocessingPipeline
 
 
@@ -30,6 +33,8 @@ class PipelineConfig:
     bias_frames_dir: Path | None = None
     preprocessing: PreprocessingConfig = field(default_factory=PreprocessingConfig)
     calibration: CalibrationConfig = field(default_factory=CalibrationConfig)
+    alignment: AlignmentConfig = field(default_factory=AlignmentConfig)
+    normalization: NormalizationConfig = field(default_factory=NormalizationConfig)
 
 
 class StarStackerPipeline:
@@ -37,6 +42,8 @@ class StarStackerPipeline:
         self.config = config
         self.preprocessing_pipeline = PreprocessingPipeline(config.preprocessing)
         self.calibration_pipeline = CalibrationPipeline(config.calibration)
+        self.alignment_pipeline = AlignmentPipeline(config.alignment)
+        self.normalization_pipeline = NormalizationPipeline(config.normalization)
 
     def load_raw_frames(self) -> list[RawFrame]:
         return load_frame_set(self.config.raw_frames_dir)
@@ -80,12 +87,23 @@ class StarStackerPipeline:
         return preprocessing_pipeline.run_batch(load_frame_set(directory))
 
     def align(self, frames: list[RawFrame]) -> list[RawFrame]:
-        """Optional AI-assisted star alignment/registration."""
-        raise NotImplementedError("Alignment is not implemented yet")
+        """Star alignment/registration: shift each frame onto a common reference frame.
+
+        `frames` must already be calibrated so the measured shift reflects
+        real pointing drift between exposures rather than uncorrected sensor
+        artifacts. Uses phase correlation, so only translation (no rotation
+        or scale) is corrected.
+        """
+        return self.alignment_pipeline.run_batch(frames)
 
     def normalize(self, frames: list[RawFrame]) -> list[RawFrame]:
-        """Background/flux normalization across frames prior to stacking."""
-        raise NotImplementedError("Normalization is not implemented yet")
+        """Background normalization across frames prior to stacking.
+
+        `frames` should already be calibrated and aligned so background
+        differences reflect sky conditions rather than uncorrected sensor
+        artifacts or misregistration.
+        """
+        return self.normalization_pipeline.run_batch(frames)
 
     def stack(self, frames: list[RawFrame]) -> RawFrame:
         raise NotImplementedError("Stacking is not implemented yet")
@@ -95,10 +113,14 @@ class StarStackerPipeline:
         raise NotImplementedError("AI denoising is not implemented yet")
 
     def run(self) -> list[RawFrame]:
-        """Runs the implemented prefix of the pipeline: load + preprocess + calibrate.
+        """Runs the implemented prefix of the pipeline: load, preprocess, calibrate,
+        align, then normalize.
 
-        Returns calibrated frames; later stages will extend this once built.
+        Returns aligned and normalized frames, ready for stacking once that
+        stage is built.
         """
         frames = self.load_raw_frames()
         frames = self.preprocess(frames)
-        return self.calibrate(frames)
+        frames = self.calibrate(frames)
+        frames = self.align(frames)
+        return self.normalize(frames)
