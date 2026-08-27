@@ -1,4 +1,4 @@
-"""Applies a measured translation to register a frame onto a reference frame's grid.
+"""Applies a measured geometric transform to register a frame onto a reference frame's grid.
 
 Stars must land on the same pixel across frames before stacking, or the
 result comes out trailed/soft rather than sharp; this is the geometric
@@ -10,21 +10,22 @@ from __future__ import annotations
 
 import numpy as np
 
-from starstacker.alignment.stats import FrameShift
+from starstacker.alignment.stats import FrameTransform
 from starstacker.io.frame import RawFrame
 
 
-def align_frame(frame: RawFrame, shift: FrameShift) -> RawFrame:
-    """Shift `frame` by `-shift` so its content lands where the reference's does.
+def align_frame(frame: RawFrame, transform: FrameTransform) -> RawFrame:
+    """Warp `frame` by `transform` so its stars land where the reference's do.
 
-    Pixels shifted in from outside the original frame are filled with 0
-    (`cv2.warpAffine`'s default border), rather than wrapped or mirrored.
+    `transform.matrix` already maps `frame`'s pixel coordinates onto the
+    reference's, matching `cv2.warpAffine`'s forward-mapping convention, so
+    it's passed through unmodified. Pixels warped in from outside the
+    original frame are filled with 0 (`cv2.warpAffine`'s default border).
     """
     import cv2
 
     data = frame.data.astype(np.float32)
     height, width = data.shape[:2]
-    matrix = np.array([[1.0, 0.0, -shift.dx], [0.0, 1.0, -shift.dy]], dtype=np.float32)
-    aligned = cv2.warpAffine(data, matrix, (width, height))
+    aligned = cv2.warpAffine(data, transform.matrix.astype(np.float32), (width, height))
 
     return frame.with_data(aligned)

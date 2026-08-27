@@ -12,13 +12,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from starstacker.alignment.align import align_frame
-from starstacker.alignment.stats import compute_shift
+from starstacker.alignment.stats import compute_transform
 from starstacker.io.frame import RawFrame
 
 
 @dataclass
 class AlignmentConfig:
     reference_index: int = 0
+    max_stars: int = 25
+    ratio_tolerance: float = 0.01
 
 
 class AlignmentPipeline:
@@ -40,6 +42,11 @@ class AlignmentPipeline:
             if frame is reference:
                 aligned.append(frame)
                 continue
-            shift = compute_shift(reference, frame)
-            aligned.append(align_frame(frame, shift))
+            transform = compute_transform(
+                reference,
+                frame,
+                max_stars=self.config.max_stars,
+                ratio_tolerance=self.config.ratio_tolerance,
+            )
+            aligned.append(align_frame(frame, transform))
         return aligned

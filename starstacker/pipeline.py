@@ -87,12 +87,13 @@ class StarStackerPipeline:
         return preprocessing_pipeline.run_batch(load_frame_set(directory))
 
     def align(self, frames: list[RawFrame]) -> list[RawFrame]:
-        """Star alignment/registration: shift each frame onto a common reference frame.
+        """Star alignment/registration: warp each frame onto a common reference frame.
 
-        `frames` must already be calibrated so the measured shift reflects
-        real pointing drift between exposures rather than uncorrected sensor
-        artifacts. Uses phase correlation, so only translation (no rotation
-        or scale) is corrected.
+        `frames` must already be calibrated so the detected star pattern
+        reflects real pointing drift/field rotation between exposures rather
+        than uncorrected sensor artifacts. Registration matches star
+        triangles between each frame and the reference to recover rotation,
+        scale, and translation - not just a plain pixel shift.
         """
         return self.alignment_pipeline.run_batch(frames)
 
