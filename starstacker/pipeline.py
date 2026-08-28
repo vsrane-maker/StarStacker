@@ -6,8 +6,8 @@ Full planned architecture:
         -> [AI-Assisted Alignment] -> Normalization -> Stacking
         -> [AI Denoising] -> Output
 
-"Raw Frames", "Preprocessing", "Calibration", "Alignment", and
-"Normalization" are implemented so far and reachable from `run()`. Each
+"Raw Frames", "Preprocessing", "Calibration", "Alignment", "Normalization",
+and "Stacking" are implemented so far and reachable from `run()`. Each
 remaining stage is stubbed below in call order so the pipeline shape stays
 visible; they raise NotImplementedError until built.
 """
@@ -23,6 +23,7 @@ from starstacker.io.frame import RawFrame
 from starstacker.io.loaders import load_frame_set
 from starstacker.normalization.pipeline import NormalizationConfig, NormalizationPipeline
 from starstacker.preprocessing.pipeline import PreprocessingConfig, PreprocessingPipeline
+from starstacker.stacking.pipeline import StackingConfig, StackingPipeline
 
 
 @dataclass
@@ -35,6 +36,7 @@ class PipelineConfig:
     calibration: CalibrationConfig = field(default_factory=CalibrationConfig)
     alignment: AlignmentConfig = field(default_factory=AlignmentConfig)
     normalization: NormalizationConfig = field(default_factory=NormalizationConfig)
+    stacking: StackingConfig = field(default_factory=StackingConfig)
 
 
 class StarStackerPipeline:
@@ -44,6 +46,7 @@ class StarStackerPipeline:
         self.calibration_pipeline = CalibrationPipeline(config.calibration)
         self.alignment_pipeline = AlignmentPipeline(config.alignment)
         self.normalization_pipeline = NormalizationPipeline(config.normalization)
+        self.stacking_pipeline = StackingPipeline(config.stacking)
 
     def load_raw_frames(self) -> list[RawFrame]:
         return load_frame_set(self.config.raw_frames_dir)
@@ -107,21 +110,28 @@ class StarStackerPipeline:
         return self.normalization_pipeline.run_batch(frames)
 
     def stack(self, frames: list[RawFrame]) -> RawFrame:
-        raise NotImplementedError("Stacking is not implemented yet")
+        """Combine aligned, normalized frames into a single stacked image.
+
+        `frames` should already be aligned and normalized so the combination
+        reflects true signal rather than misregistration or background
+        drift. Uses a per-pixel sigma-clipped mean by default, which rejects
+        outliers like cosmic ray hits or satellite trails before averaging.
+        """
+        return self.stacking_pipeline.run(frames)
 
     def denoise(self, stacked: RawFrame) -> RawFrame:
         """Optional AI denoising of the final stacked image."""
         raise NotImplementedError("AI denoising is not implemented yet")
 
-    def run(self) -> list[RawFrame]:
+    def run(self) -> RawFrame:
         """Runs the implemented prefix of the pipeline: load, preprocess, calibrate,
-        align, then normalize.
+        align, normalize, then stack.
 
-        Returns aligned and normalized frames, ready for stacking once that
-        stage is built.
+        Returns the final stacked image; denoising is not yet built.
         """
         frames = self.load_raw_frames()
         frames = self.preprocess(frames)
         frames = self.calibrate(frames)
         frames = self.align(frames)
-        return self.normalize(frames)
+        frames = self.normalize(frames)
+        return self.stack(frames)
